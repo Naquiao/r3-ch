@@ -216,3 +216,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.cursor/plans/greenhouse-happy-path-v1_36d01fec.plan.md

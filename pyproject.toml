@@ -1,0 +1,19 @@
+[project]
+name = "r3-ch"
+version = "0.1.0"
+description = "ATS job scraper for AI/ML/LLM roles"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+r3-ch = "r3_ch.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
