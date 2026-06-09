@@ -15,6 +15,7 @@ import { readEvaluations, readMasterMatchesMany } from "@/lib/storage";
 import type {
   AtsFilter,
   DecisionFilter,
+  StageFilter,
   OpportunitySort,
   OpportunityWithEvaluation,
 } from "@/lib/types";
@@ -27,6 +28,17 @@ function parseSort(rawSort: string | null): OpportunitySort {
 
 function parseAtsFilter(rawAts: string | null): AtsFilter {
   if (rawAts === "greenhouse" || rawAts === "ashby" || rawAts === "lever" || rawAts === "bamboohr") return rawAts;
+  return "all";
+}
+
+function parseStageFilter(rawStage: string | null): StageFilter {
+  if (rawStage === "stage_0"
+    || rawStage === "applied"
+    || rawStage === "in_progress"
+    || rawStage === "won"
+    || rawStage === "lost") {
+    return rawStage;
+  }
   return "all";
 }
 
@@ -58,6 +70,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const decision = (searchParams.get("decision") ?? "all") as DecisionFilter;
   const sort = parseSort(searchParams.get("sort"));
   const ats = parseAtsFilter(searchParams.get("ats"));
+  const stage = parseStageFilter(searchParams.get("stage"));
 
   const [master, evaluations] = await Promise.all([
     readMasterMatchesMany(MASTER_MATCHES_PATHS),
@@ -75,6 +88,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ats: recordAts,
       key,
       decision: evaluation?.decision ?? null,
+      stage: evaluation?.stage ?? null,
     };
   });
 
@@ -85,9 +99,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       || (decision === "unclassified" && item.decision === null)
       || item.decision === decision;
 
+    const stageValue = item.stage ?? "stage_0";
+    const stageMatches = stage === "all" || stageValue === stage;
+
     const atsMatches = ats === "all" || item.ats === ats;
 
-    return locationMatches && decisionMatches && atsMatches;
+    return locationMatches && decisionMatches && stageMatches && atsMatches;
   });
 
   filtered.sort((a, b) => compareByUpdatedAt(a, b, sort));

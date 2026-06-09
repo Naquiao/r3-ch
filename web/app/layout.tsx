@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Figtree, Geist_Mono } from "next/font/google";
 import type { ReactElement, ReactNode } from "react";
+import { SidebarNav } from "@/components/sidebar-nav";
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
@@ -23,7 +24,20 @@ export default function RootLayout({ children }: { children: ReactNode }): React
   return (
     <html lang="en" className={`${geistMono.variable} ${figtree.variable}`}>
       <body>
-        <main>{children}</main>
+        <div className="window-shell">
+          <div className="window-chrome">
+            <div className="window-dots" aria-hidden="true">
+              <span className="dot close"></span>
+              <span className="dot min"></span>
+              <span className="dot max"></span>
+            </div>
+            <span className="window-title">BUGSTER // Career Pipeline</span>
+          </div>
+          <div className="app-layout">
+            <SidebarNav />
+            <main className="app-main">{children}</main>
+          </div>
+        </div>
       </body>
     </html>
   );

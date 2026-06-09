@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildOpportunityKey, normalizeAts } from "@/lib/opportunity-key";
 import { EVALUATIONS_PATH } from "@/lib/paths";
 import { readEvaluations, writeEvaluationsAtomic } from "@/lib/storage";
-import type { AtsProvider, Decision } from "@/lib/types";
+import type { AtsProvider, Decision, FunnelStage } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -12,6 +12,7 @@ type EvaluationPayload = {
   slug?: string;
   job_id?: string | number;
   decision?: Decision;
+  stage?: FunnelStage;
   notes?: string;
 };
 
@@ -21,6 +22,14 @@ type BulkEvaluationPayload = {
 
 function isDecision(value: string): value is Decision {
   return value === "interested" || value === "not_interested" || value === "later";
+}
+
+function isStage(value: string): value is FunnelStage {
+  return value === "stage_0"
+    || value === "applied"
+    || value === "in_progress"
+    || value === "won"
+    || value === "lost";
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -50,6 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const slug = `${update.slug ?? ""}`.trim();
     const jobId = `${update.job_id ?? ""}`.trim();
     const decision = `${update.decision ?? ""}`.trim();
+    const stageRaw = update.stage ? `${update.stage}`.trim() : "";
     const notes = `${update.notes ?? ""}`.trim();
     const ats = normalizeAts(update.ats);
 
@@ -60,10 +70,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (stageRaw && !isStage(stageRaw)) {
+      return NextResponse.json(
+        { error: "Stage is invalid. Allowed values: stage_0, applied, in_progress, won, lost." },
+        { status: 400 },
+      );
+    }
+
     const key = buildOpportunityKey(ats, slug, jobId);
+    const previous = evaluations[key];
+    const incomingStage = isStage(stageRaw) ? stageRaw : undefined;
+    const nextStage = decision === "interested"
+      ? (incomingStage ?? previous?.stage ?? "stage_0")
+      : undefined;
+
     evaluations[key] = {
       decision,
-      notes: notes || undefined,
+      stage: nextStage,
+      notes: notes || previous?.notes,
       updated_at: now,
     };
     updatedKeys.push(key);

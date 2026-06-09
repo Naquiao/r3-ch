@@ -159,15 +159,102 @@ a:hover {
   flex: 1;
 }
 
-main {
-  max-width: 960px;
-  margin: var(--s-xl) auto;
-  /* Generous, always-present breathing room from the window edges */
-  padding: var(--s-lg) var(--s-2xl);
+.app-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 56px);
 }
 
-@media (max-width: 720px) {
-  main {
+.sidebar-nav {
+  border-right: 1px solid var(--ink);
+  background-color: var(--surface);
+  padding: var(--s-lg) var(--s-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.sidebar-nav-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+.sidebar-nav-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+}
+
+.sidebar-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+
+.sidebar-nav-link {
+  border: 1px solid var(--ink);
+  border-radius: var(--r-sm);
+  padding: var(--s-sm);
+  background-color: var(--white);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.sidebar-nav-link:hover {
+  text-decoration: none;
+}
+
+.sidebar-nav-link.active {
+  background-color: var(--lime);
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.sidebar-nav-link-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-nav-link-hint {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.app-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--s-xl) var(--s-2xl);
+  box-sizing: border-box;
+}
+
+@media (max-width: 980px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+    padding: var(--s-md);
+  }
+
+  .sidebar-nav-links {
+    flex-direction: row;
+  }
+
+  .sidebar-nav-link {
+    flex: 1;
+  }
+
+  .app-main {
     padding: var(--s-xl) var(--s-md);
   }
 }
@@ -324,6 +411,7 @@ main {
   align-items: baseline;
   gap: var(--s-md);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .card-checkbox-wrap {
@@ -341,6 +429,12 @@ main {
 .card-summary-title {
   margin: 0;
   font-size: 1.1rem;
+}
+
+.card-location-tag {
+  max-width: min(100%, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-summary-meta {
@@ -619,4 +713,93 @@ main {
   font-family: var(--font-mono);
   font-size: 1.25rem;
   color: var(--ink-muted);
+}
+
+.kanban-board {
+  display: flex;
+  gap: var(--s-md);
+  overflow-x: auto;
+  padding-bottom: var(--s-sm);
+}
+
+.kanban-column {
+  min-width: 260px;
+  width: 260px;
+  background-color: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+  padding: var(--s-md);
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column.is-drop-active {
+  background-color: color-mix(in srgb, var(--surface) 80%, var(--lime) 20%);
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-sm);
+}
+
+.kanban-column-header .h3 {
+  font-size: 1.2rem;
+}
+
+.kanban-column-description {
+  margin: var(--s-xs) 0 var(--s-md) 0;
+  font-size: 0.9rem;
+}
+
+.kanban-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+  min-height: 220px;
+}
+
+.kanban-empty {
+  border: 1px dashed var(--ink);
+  border-radius: var(--r-sm);
+  padding: var(--s-md);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  background-color: var(--white);
+}
+
+.kanban-card {
+  border: 1px solid var(--ink);
+  border-radius: var(--r-sm);
+  background-color: var(--white);
+  padding: var(--s-sm);
+  box-shadow: var(--shadow);
+  cursor: grab;
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card-title {
+  margin: 0 0 var(--s-xs) 0;
+  font-size: 0.95rem;
+}
+
+.kanban-card-location {
+  margin: var(--s-xs) 0 0;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.kanban-card-actions {
+  margin-top: var(--s-sm);
+}
+
+.kanban-card-actions .btn-ghost {
+  padding: 2px 0;
+  font-size: 0.7rem;
 }
