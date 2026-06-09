@@ -46,19 +46,24 @@ class GreenhouseMasterStore:
                 inserted_count += 1
                 continue
 
-            existing.update(
-                {
-                    "title": record.get("title"),
-                    "updated_at": record.get("updated_at"),
-                    "location_raw": record.get("location_raw"),
-                    "eligibility": record.get("eligibility"),
-                    "absolute_url": record.get("absolute_url"),
-                    "matched_keywords": record.get("matched_keywords"),
-                    "target_location": record.get("target_location"),
-                    "last_seen_at": observed_at_utc,
-                    "last_run_id": run_id,
-                }
-            )
+            update_data = {
+                "ats": record.get("ats"),
+                "title": record.get("title"),
+                "updated_at": record.get("updated_at"),
+                "location_raw": record.get("location_raw"),
+                "eligibility": record.get("eligibility"),
+                "absolute_url": record.get("absolute_url"),
+                "matched_keywords": record.get("matched_keywords"),
+                "target_location": record.get("target_location"),
+                "last_seen_at": observed_at_utc,
+                "last_run_id": run_id,
+            }
+            
+            new_desc = record.get("description")
+            if new_desc:
+                update_data["description"] = new_desc
+
+            existing.update(update_data)
             updated_count += 1
 
         ordered_records = sorted(
