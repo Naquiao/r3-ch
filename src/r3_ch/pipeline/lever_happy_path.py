@@ -1,4 +1,4 @@
-"""Greenhouse happy path pipeline (v1)."""
+"""Lever happy path pipeline."""
 
 from __future__ import annotations
 
@@ -11,19 +11,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from r3_ch.adapters.opportunity_normalizer import normalize_greenhouse_job
-from r3_ch.ats.greenhouse_client import GreenhouseClient
+from r3_ch.adapters.opportunity_normalizer import extract_lever_location, normalize_lever_job
+from r3_ch.ats.lever_client import LeverClient
 from r3_ch.config import (
-    GREENHOUSE_ACTIVE_SLUGS_PATH,
-    GREENHOUSE_INVALID_SLUGS_PATH,
-    GREENHOUSE_LAST_RUN_PATH,
-    GREENHOUSE_PROCESSED_SLUGS_PATH,
-    GREENHOUSE_RATE_LIMIT_PER_SEC,
-    GREENHOUSE_SLUGS_PATH,
-    GREENHOUSE_STATE_DIR,
-    GREENHOUSE_MAX_CONCURRENCY,
-    OUTPUT_MASTER_MATCHES_PATH,
-    OUTPUT_MATCHES_PATH,
+    LEVER_ACTIVE_SLUGS_PATH,
+    LEVER_INVALID_SLUGS_PATH,
+    LEVER_LAST_RUN_PATH,
+    LEVER_MAX_CONCURRENCY,
+    LEVER_PROCESSED_SLUGS_PATH,
+    LEVER_RATE_LIMIT_PER_SEC,
+    LEVER_SLUGS_PATH,
+    LEVER_STATE_DIR,
+    OUTPUT_LEVER_MASTER_MATCHES_PATH,
+    OUTPUT_LEVER_MATCHES_PATH,
 )
 from r3_ch.filters.eligibility import evaluate_eligibility
 from r3_ch.filters.role_filter import match_ai_role_keywords
@@ -39,6 +39,7 @@ class SlugProcessResult:
     status: str
     error: str | None
     matched_records: list[dict[str, Any]]
+
 
 def _make_funnel(total_slugs: int) -> dict[str, int]:
     return {
@@ -80,18 +81,29 @@ class AsyncRateLimiter:
 
 def _build_state_store() -> GreenhouseSlugStateStore:
     return GreenhouseSlugStateStore(
-        source_slugs_path=GREENHOUSE_SLUGS_PATH,
-        active_slugs_path=GREENHOUSE_ACTIVE_SLUGS_PATH,
-        invalid_slugs_path=GREENHOUSE_INVALID_SLUGS_PATH,
-        processed_slugs_path=GREENHOUSE_PROCESSED_SLUGS_PATH,
-        last_run_path=GREENHOUSE_LAST_RUN_PATH,
+        source_slugs_path=LEVER_SLUGS_PATH,
+        active_slugs_path=LEVER_ACTIVE_SLUGS_PATH,
+        invalid_slugs_path=LEVER_INVALID_SLUGS_PATH,
+        processed_slugs_path=LEVER_PROCESSED_SLUGS_PATH,
+        last_run_path=LEVER_LAST_RUN_PATH,
     )
+
+
+def _extract_lever_content(job: dict[str, Any]) -> str:
+    content = (
+        job.get("descriptionPlain")
+        or job.get("description")
+        or job.get("text")
+        or job.get("descriptionHtml")
+        or ""
+    )
+    return str(content)
 
 
 async def _process_slug(
     slug: str,
     target_location: str,
-    client: GreenhouseClient,
+    client: LeverClient,
     semaphore: asyncio.Semaphore,
     rate_limiter: AsyncRateLimiter,
 ) -> SlugProcessResult:
@@ -110,21 +122,16 @@ async def _process_slug(
 
     matches: list[dict[str, Any]] = []
     for job in fetch_result.jobs:
-        title = str(job.get("title", ""))
-        content = str(job.get("content", ""))
+        title = str(job.get("text", "") or job.get("title", ""))
+        content = _extract_lever_content(job)
         matched_keywords = match_ai_role_keywords(title=title, content=content)
         if not matched_keywords:
             continue
 
-        location = job.get("location")
-        location_raw: str | None = None
-        if isinstance(location, dict):
-            value = location.get("name")
-            if isinstance(value, str) and value.strip():
-                location_raw = value.strip()
+        location_raw = extract_lever_location(job)
         eligibility = evaluate_eligibility(location_raw)
         matches.append(
-            normalize_greenhouse_job(
+            normalize_lever_job(
                 slug=slug,
                 job=job,
                 target_location=target_location,
@@ -141,7 +148,9 @@ async def _process_slug(
     )
 
 
-def _apply_state_transitions(previous: SlugState, results: list[SlugProcessResult]) -> tuple[SlugState, dict[str, list[str]]]:
+def _apply_state_transitions(
+    previous: SlugState, results: list[SlugProcessResult]
+) -> tuple[SlugState, dict[str, list[str]]]:
     active = set(previous.active)
     invalid = set(previous.invalid)
     processed = set(previous.processed)
@@ -164,11 +173,11 @@ def _apply_state_transitions(previous: SlugState, results: list[SlugProcessResul
     return SlugState(active=active, invalid=invalid, processed=processed), transitions
 
 
-async def run_greenhouse_happy_path(
+async def run_lever_happy_path(
     limit: int,
     target_location: str,
-    max_concurrency: int = GREENHOUSE_MAX_CONCURRENCY,
-    rate_limit_per_sec: float = GREENHOUSE_RATE_LIMIT_PER_SEC,
+    max_concurrency: int = LEVER_MAX_CONCURRENCY,
+    rate_limit_per_sec: float = LEVER_RATE_LIMIT_PER_SEC,
 ) -> dict[str, Any]:
     state_store = _build_state_store()
     all_source_slugs = state_store.load_source_slugs()
@@ -179,12 +188,12 @@ async def run_greenhouse_happy_path(
         limit=limit,
     )
     logger.info(
-        "Run config: limit=%s concurrency=%s rate_limit=%s/s source=%s state_dir=%s",
+        "Lever run config: limit=%s concurrency=%s rate_limit=%s/s source=%s state_dir=%s",
         limit,
         max_concurrency,
         rate_limit_per_sec,
-        GREENHOUSE_SLUGS_PATH,
-        GREENHOUSE_STATE_DIR,
+        LEVER_SLUGS_PATH,
+        LEVER_STATE_DIR,
     )
 
     funnel = _make_funnel(total_slugs=len(slugs))
@@ -192,7 +201,7 @@ async def run_greenhouse_happy_path(
     semaphore = asyncio.Semaphore(max_concurrency)
     rate_limiter = AsyncRateLimiter(rate_limit_per_sec)
 
-    async with GreenhouseClient() as client:
+    async with LeverClient() as client:
         tasks = [
             _process_slug(
                 slug=slug,
@@ -212,11 +221,7 @@ async def run_greenhouse_happy_path(
 
         if result.status == "error":
             funnel["portal_error"] += 1
-            logger.warning(
-                "Portal error slug=%s error=%s",
-                result.slug,
-                result.error,
-            )
+            logger.warning("Portal error slug=%s error=%s", result.slug, result.error)
             continue
 
         funnel["portal_active"] += 1
@@ -234,7 +239,7 @@ async def run_greenhouse_happy_path(
     updated_state, transitions = _apply_state_transitions(previous_state, results)
     run_id = datetime.now(UTC).strftime("run_%Y%m%dT%H%M%S%fZ")
     observed_at_utc = datetime.now(UTC).isoformat()
-    master_store = GreenhouseMasterStore(OUTPUT_MASTER_MATCHES_PATH)
+    master_store = GreenhouseMasterStore(OUTPUT_LEVER_MASTER_MATCHES_PATH)
     master_upsert = master_store.upsert_many(
         records=matches,
         run_id=run_id,
@@ -264,15 +269,15 @@ async def run_greenhouse_happy_path(
         run_summary=run_summary,
     )
 
-    OUTPUT_MATCHES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_MATCHES_PATH.open("w", encoding="utf-8") as file:
+    OUTPUT_LEVER_MATCHES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with OUTPUT_LEVER_MATCHES_PATH.open("w", encoding="utf-8") as file:
         for record in matches:
             file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    logger.info("Funnel: %s", json.dumps(funnel, ensure_ascii=False))
+    logger.info("Lever funnel: %s", json.dumps(funnel, ensure_ascii=False))
     return {
         "funnel": funnel,
-        "output_path": str(OUTPUT_MATCHES_PATH),
+        "output_path": str(OUTPUT_LEVER_MATCHES_PATH),
         "matches_count": len(matches),
         "master_total_records": master_upsert.total_records,
         "master_inserted_count": master_upsert.inserted_count,
