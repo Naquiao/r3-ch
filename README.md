@@ -2,13 +2,21 @@
 
 Happy path for scraping AI/ML/LLM roles from multiple ATS providers (Greenhouse + Ashby + Lever + BambooHR).
 
-## Setup (uv)
+## Quickstart (backend + frontend)
+
+### Prerequisites
+
+- Python `>=3.11`
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js `>=18` + npm
+
+### 1) Backend setup
 
 ```bash
 uv sync
 ```
 
-## Run ATS ingestion
+### 2) Run backend ingestion
 
 Default run (Greenhouse only):
 
@@ -16,11 +24,110 @@ Default run (Greenhouse only):
 uv run r3-ch
 ```
 
-Useful flags:
+Run all ATS:
 
 ```bash
-uv run r3-ch --ats all --limit 10 --target-location "Cordoba, Argentina" --greenhouse-max-concurrency 20 --greenhouse-rate-limit 20 --ashby-max-concurrency 5 --ashby-rate-limit 1.0 --lever-max-concurrency 10 --lever-rate-limit 5.0 --bamboohr-max-concurrency 5 --bamboohr-rate-limit 2.0 --log-level INFO
+uv run r3-ch --ats all
 ```
+
+### 3) Frontend setup and run
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+```
+
+Open `http://localhost:3000` (redirects to `/review`).
+
+App sections:
+- `Review` (`/review`): top of funnel (triage as interested/pass/later)
+- `Pipeline` (`/pipeline`): bottom of funnel kanban (`stage_0`, `applied`, `in_progress`, `won`, `lost`)
+
+## Backend commands reference
+
+```bash
+uv run r3-ch --help
+```
+
+### Provider run examples
+
+```bash
+# All providers
+uv run r3-ch --ats all
+
+# Only Greenhouse
+uv run r3-ch --ats greenhouse
+
+# Only Ashby
+uv run r3-ch --ats ashby
+
+# Only Lever
+uv run r3-ch --ats lever
+
+# Only BambooHR
+uv run r3-ch --ats bamboohr
+```
+
+Most useful flags:
+- `--ats greenhouse|ashby|lever|bamboohr|all`
+- `--limit <n>` number of slugs processed per selected ATS in that run
+- `--target-location "City, Country"` target location string for eligibility evaluation
+- `--log-level DEBUG|INFO|WARNING|ERROR`
+
+Important:
+- Please do not edit concurrency or rate-limit settings unless explicitly approved.
+- Por favor no editar los valores de concurrency/rate-limit para que no te baneen por exceso de requests.
+
+## Customize search preferences (roles, locations, companies)
+
+### Change role keywords (persistent)
+
+Edit `AI_ROLE_KEYWORDS` in `src/r3_ch/config.py`.
+
+Example:
+
+```python
+AI_ROLE_KEYWORDS = (
+    "ai engineer",
+    "machine learning engineer",
+    "staff machine learning engineer",
+    "llm engineer",
+    "ai scientist",
+)
+```
+
+Then rerun ingestion:
+
+```bash
+uv run r3-ch --ats all --limit 50
+```
+
+### Change location matching rules (persistent)
+
+Edit these in `src/r3_ch/config.py`:
+- `TARGET_LOCATION` default target string for CLI
+- `LATAM_LOCATION_HINTS`
+- `REMOTE_OK_HINTS`
+- `REMOTE_SCOPE_HINTS`
+
+Fast one-off override without editing code:
+
+```bash
+uv run r3-ch --ats all --target-location "Buenos Aires, Argentina"
+```
+
+### Change which companies are scanned
+
+Edit source slug lists:
+- `data/ats/greenhouse_companies.json`
+- `data/ats/ashby_companies.json`
+- `data/ats/lever_companies.json`
+- `data/ats/bamboohr_companies.json`
+
+Notes:
+- New slugs are picked up on next run.
+- Processed state is cached under `data/ats/state/`.
+- If you need a full re-scan from scratch, clear the state files in `data/ats/state/` and run again.
 
 ## What it does
 
@@ -139,6 +246,8 @@ Then open `http://localhost:3000`.
   - `Later` (`later`)
 - Saves decisions via API to `data/ui/opportunity_evaluations.json`
   - key format: `ats:slug:job_id` (legacy `slug:job_id` is still read for compatibility)
+- Pipeline stages for interested roles are also persisted in `data/ui/opportunity_evaluations.json`:
+  - `stage_0`, `applied`, `in_progress`, `won`, `lost`
 - JD description fetch on-demand from `absolute_url` cuando falta en el JSON master.
   - Al fetchear desde la UI, la descripción scrapeada **se persiste automáticamente** en el respectivo master JSON (Greenhouse/Ashby/Lever/BambooHR). Esto hace que futuras recargas de la UI o inspecciones muestren la descripción sin tener que volver a fetchear la URL, aplicando como backfill de aquellos roles que no capturaron descripción durante la ingesta.
   - Política de actualización: la persistencia on-demand solo inserta el dato si el JSON maestro lo tenía vacío, no pisa descripciones existentes para no perder el original.
